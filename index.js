@@ -12,4 +12,4 @@ const creaPersona = (nombre,apellido) => {
 
 const pepe = creaPersona("pepe", "lopez")
 
-console.log(pepe)
+console.log(pepe.name)
