@@ -10,25 +10,7 @@
         const outer = JSON.parse(process.env.RESPONSE);
 
         if (outer.data) {
-          // extraer JSON interno (lo que devuelve Gemini)
-          const match = outer.data.match(/\{[\s\S]*\}/);
-
-          if (match) {
-            const inner = JSON.parse(match[0]);
-
-            body = `
-🧠 AI Review Score: ${inner.score}
-
-${inner.summary}
-
-Issues:
-${inner.issues.length === 0 
-  ? "✅ Sin problemas detectados" 
-  : inner.issues.map(i => `- [${i.severity}] ${i.message}`).join("\n")}
-`;
-          } else {
-            body = "❌ No se pudo extraer JSON interno:\n\n" + outer.data;
-          }
+          body = "📦 Respuesta de la IA:\n\n" + outer.data;
         } else {
           body = JSON.stringify(outer, null, 2);
         }
