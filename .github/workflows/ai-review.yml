@@ -1,0 +1,59 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Get diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff origin/${{ github.base_ref }} > diff.txt
+
+      - name: Send to your API
+        id: review
+        run: |
+          BODY=$(jq -Rs '{ name: ., gemini: true }' diff.txt)
+
+          RESPONSE=$(curl -s -X POST https://chatsito-qi2t.onrender.com/send \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+
+          echo "RESPONSE<<EOF" >> $GITHUB_ENV
+          echo "$RESPONSE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Debug response (por si explota)
+        run: |
+          echo "$RESPONSE"
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        env:
+          RESPONSE: ${{ env.RESPONSE }}
+        with:
+          script: |
+            let body = "⚠️ No hubo respuesta válida de la API";
+
+            try {
+              const response = JSON.parse(process.env.RESPONSE);
+
+              // Ajustá esto según cómo responde tu API
+              body = response.comments || response.message || JSON.stringify(response, null, 2);
+            } catch (e) {
+              body = "❌ Error parseando respuesta:\n\n" + process.env.RESPONSE;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
