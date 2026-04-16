@@ -13,5 +13,3 @@ const creaPersona = (nombre,apellido) => {
 const pepe = creaPersona("pepe", "lopez")
 
 console.log(pepe.name)
-
-debugger
