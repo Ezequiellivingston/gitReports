@@ -16,11 +16,27 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - name: Get diff
+      - name: Get only code diff
         run: |
           git fetch origin ${{ github.base_ref }}
-          git diff origin/${{ github.base_ref }} > diff.txt
+
+          # Obtener lista de archivos modificados
+          git diff --name-only origin/${{ github.base_ref }} > files.txt
+
+          # Filtrar solo archivos de código
+          grep -E '\.(js|ts|jsx|tsx)$' files.txt > filtered.txt || true
+
+          echo "Archivos filtrados:"
+          cat filtered.txt || echo "No hay archivos de código"
+
+          # Crear diff solo de esos archivos
+          > diff.txt
+          while read file; do
+            git diff origin/${{ github.base_ref }} -- "$file" >> diff.txt
+          done < filtered.txt
 
       - name: Send to your API
         id: review
@@ -35,7 +51,7 @@ jobs:
           echo "$RESPONSE" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Debug response (por si explota)
+      - name: Debug response
         run: |
           echo "$RESPONSE"
 
