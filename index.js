@@ -15,3 +15,6 @@ const pepe = creaPersona("pepe", "lopez")
 console.log(pepe.name)
 
 debugger
+
+
+console.log(pepe.name)
