@@ -1,27 +1,78 @@
-- name: Comment PR
-  uses: actions/github-script@v7
-  env:
-    RESPONSE: ${{ env.RESPONSE }}
-  with:
-    script: |
-      let body = "⚠️ No hubo respuesta válida";
+name: AI PR Review
 
-      try {
-        const outer = JSON.parse(process.env.RESPONSE);
+on:
+  pull_request:
+    types: [opened, synchronize]
 
-        if (outer.data) {
-          body = "📦 Respuesta de la IA:\n\n" + outer.data;
-        } else {
-          body = JSON.stringify(outer, null, 2);
-        }
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
 
-      } catch (e) {
-        body = "❌ Error parseando:\n\n" + process.env.RESPONSE;
-      }
+jobs:
+  review:
+    runs-on: ubuntu-latest
 
-      await github.rest.issues.createComment({
-        issue_number: context.issue.number,
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        body
-      });
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get only code diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+          # Obtener lista de archivos modificados
+          git diff --name-only origin/${{ github.base_ref }} > files.txt
+
+          # Filtrar solo archivos de código
+          grep -E '\.(js|ts|jsx|tsx)$' files.txt > filtered.txt || true
+
+          echo "Archivos filtrados:"
+          cat filtered.txt || echo "No hay archivos de código"
+
+          # Crear diff solo de esos archivos
+          > diff.txt
+          while read file; do
+            git diff origin/${{ github.base_ref }} -- "$file" >> diff.txt
+          done < filtered.txt
+
+      - name: Send to your API
+        id: review
+        run: |
+          BODY=$(jq -Rs '{ name: ., gemini: true }' diff.txt)
+
+          RESPONSE=$(curl -s -X POST https://chatsito-qi2t.onrender.com/send \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+
+          echo "RESPONSE<<EOF" >> $GITHUB_ENV
+          echo "$RESPONSE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Debug response
+        run: |
+          echo "$RESPONSE"
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        env:
+          RESPONSE: ${{ env.RESPONSE }}
+        with:
+          script: |
+            let body = "⚠️ No hubo respuesta válida de la API";
+
+            try {
+              const response = JSON.parse(process.env.RESPONSE);
+              body = response.comments || response.message || JSON.stringify(response, null, 2);
+            } catch (e) {
+              body = "❌ Error parseando respuesta:\n\n" + process.env.RESPONSE;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
